@@ -11,6 +11,6 @@ model:
   provider: openai
   name: gpt-4.1
   temperature: 0.2      # bajo: respuestas consistentes y con poca invención
-  max_tokens: 1024      # tope de la respuesta
+  max_tokens: 2048      # tope de la respuesta (los trámites largos tienen listas extensas)
   timeout: 60           # segundos por llamada
   max_retries: 2

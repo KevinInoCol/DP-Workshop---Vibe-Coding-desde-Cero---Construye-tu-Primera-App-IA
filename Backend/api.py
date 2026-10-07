@@ -3,13 +3,15 @@ API REST (FastAPI) que expone el agente de la Alcaldía de Girardota al Frontend
 
 El Frontend envía cada mensaje con un session_id propio; ese id se usa como
 thread_id del checkpointer, así cada pestaña del chat conserva su conversación.
-La memoria es volátil: se pierde al reiniciar el servidor.
+Las conversaciones se guardan en Postgres (memoria/): sobreviven a reinicios.
+El pool de conexiones se abre al arrancar y se cierra al apagar el servidor.
 
 Ejecutar:
     .venv/bin/uvicorn api:app --reload --port 8000
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -17,16 +19,26 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from agent import crear_agente, responder, verificar_configuracion
+from agent import crear_agente, obtener_historial, responder, verificar_configuracion
+from memoria import crear_checkpointer
 
 load_dotenv()
 
 FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
 
 verificar_configuracion()
-agente = crear_agente()
+checkpointer, pool = crear_checkpointer()
+agente = crear_agente(checkpointer)
 
-app = FastAPI(title="Agente Alcaldía de Girardota")
+
+@asynccontextmanager
+async def ciclo_de_vida(app):
+    yield
+    if pool:
+        pool.close()
+
+
+app = FastAPI(title="Agente Alcaldía de Girardota", lifespan=ciclo_de_vida)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
@@ -44,6 +56,16 @@ class ChatResponse(BaseModel):
     reply: str
 
 
+class Mensaje(BaseModel):
+    role: str
+    content: str
+
+
+class HistorialResponse(BaseModel):
+    session_id: str
+    messages: list[Mensaje]
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
@@ -56,3 +78,15 @@ async def chat(req: ChatRequest):
     except Exception as exc:
         raise HTTPException(status_code=502, detail="El agente no pudo responder.") from exc
     return ChatResponse(reply=reply)
+
+
+@app.get("/api/historial/{session_id}", response_model=HistorialResponse)
+async def historial(session_id: str):
+    """Devuelve la conversación guardada para que el Frontend la retome al recargar."""
+    if not 0 < len(session_id) <= 100:
+        raise HTTPException(status_code=422, detail="session_id inválido.")
+    try:
+        mensajes = await run_in_threadpool(obtener_historial, agente, session_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="No se pudo leer el historial.") from exc
+    return HistorialResponse(session_id=session_id, messages=mensajes)

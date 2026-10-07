@@ -1,10 +1,15 @@
 # Servicios de infraestructura local del proyecto.
 #
-# Levantar:   docker compose up -d
-# Detener:    docker compose down          (los datos se conservan en el volumen)
-# Borrar todo: docker compose down -v      (elimina también los vectores)
+# Levantar:    docker compose up -d
+# Detener:     docker compose down          (los datos se conservan en los volúmenes)
+# Borrar todo: docker compose down -v       (elimina vectores Y conversaciones)
 #
-# Dashboard de Qdrant: http://localhost:6333/dashboard
+# Qdrant   → http://localhost:6333/dashboard   (base de conocimiento del RAG)
+# Postgres → localhost:5432                     (histórico de conversaciones)
+#
+# Las credenciales de Postgres son solo para desarrollo local. Para cambiarlas,
+# crea un .env junto a este archivo con POSTGRES_USER / POSTGRES_PASSWORD /
+# POSTGRES_DB y ajusta POSTGRES_URL en Backend/.env.
 
 services:
   qdrant:
@@ -17,5 +22,25 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: girardota-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-girardota}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-girardota_local}
+      POSTGRES_DB: ${POSTGRES_DB:-girardota}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Desde Postgres 18 el volumen se monta en /var/lib/postgresql (no en .../data).
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   qdrant_data:
+  postgres_data:
