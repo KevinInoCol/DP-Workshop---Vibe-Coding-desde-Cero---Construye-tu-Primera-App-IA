@@ -18,6 +18,7 @@ Agente conversacional de atención ciudadana para el municipio de **Girardota (A
 - 📄 **Trámites:** explica para qué sirve cada trámite (predial, certificado de residencia, licencias, SISBÉN…), qué suele requerir y qué dependencia lo atiende.
 - 📨 **PQRSD:** ayuda a identificar si es petición, queja, reclamo, sugerencia o denuncia y cómo radicarla.
 - 🚨 **Urgencias:** ante una emergencia remite de inmediato a la línea **123**.
+- 🕒 **Fecha y hora reales:** las consulta con una tool en hora de Colombia, cada vez que las necesita.
 - 🧠 **Memoria por conversación:** recuerda el contexto dentro de cada sesión de chat.
 - 🛡️ **No inventa datos:** costos, plazos, horarios y teléfonos los remite siempre a los canales oficiales.
 
@@ -31,6 +32,7 @@ flowchart LR
     A --> M[("GPT-4.1<br/>OpenAI")]
     P["prompt/<br/>system_prompt.yaml"] -.-> A
     C["model_config/<br/>model_config.yaml"] -.-> A
+    A <--> T["tools/<br/>fecha y hora"]
 ```
 
 ## 📁 Estructura del proyecto
@@ -44,6 +46,9 @@ flowchart LR
 │   │   └── system_prompt.yaml         # Prompt instruction en formato de tags
 │   ├── model_config/
 │   │   └── model_config.yaml          # Modelo, temperatura, tokens, reintentos
+│   ├── tools/
+│   │   ├── __init__.py                # Lista TOOLS que recibe el agente
+│   │   └── fecha_hora.py              # obtener_fecha_hora_actual (America/Bogota)
 │   ├── requirements.txt
 │   └── .env.example
 └── Frontend/
@@ -138,9 +143,19 @@ El `session_id` identifica la conversación: mismo id → el agente recuerda lo 
 
 El prompt está separado del código y organizado por **tags**, cada uno con una responsabilidad:
 
-`<Identidad>` · `<Contexto_Temporal>` · `<Personalidad>` · `<Habilidades>` · `<Objetivo_Principal>` · `<Fuentes_De_Datos>` · `<Instrucciones_Generales>` · `<Deteccion_Intenciones>` · `<Flujos_Por_Intencion>` · `<Formato_De_Respuesta>` · `<IMPORTANTE>`
+`<Identidad>` · `<Personalidad>` · `<Habilidades>` · `<Objetivo_Principal>` · `<Fuentes_De_Datos>` · `<Herramientas_Disponibles>` · `<Instrucciones_Generales>` · `<Deteccion_Intenciones>` · `<Flujos_Por_Intencion>` · `<Formato_De_Respuesta>` · `<IMPORTANTE>`
 
-Los placeholders `{bot_name}` y `{fecha_actual}` se reemplazan al arrancar el agente.
+El placeholder `{bot_name}` se reemplaza al arrancar el agente.
+
+### Tools — `Backend/tools/`
+
+| Tool | Qué devuelve | Cuándo la usa el agente |
+|---|---|---|
+| `obtener_fecha_hora_actual` | Día de la semana, fecha y hora en Colombia (UTC-5) | Preguntas por la fecha u hora, o expresiones como "hoy", "mañana", "este mes", plazos y horarios |
+
+La fecha **no** va en el prompt: se calcula en cada llamada, así nunca queda congelada aunque el servidor lleve días encendido.
+
+Para añadir una tool nueva: créala en `tools/` con el decorador `@tool`, agrégala a la lista `TOOLS` de `tools/__init__.py` y descríbela en `<Herramientas_Disponibles>` del prompt con el mismo nombre.
 
 ### Variables de entorno — `Backend/.env`
 
@@ -151,6 +166,18 @@ Los placeholders `{bot_name}` y `{fecha_actual}` se reemplazan al arrancar el ag
 
 > ⚠️ Nunca subas tu `.env` al repositorio: ya está incluido en `.gitignore`.
 
+## 🤖 Skills de Claude Code
+
+El repo incluye en `.claude/skills/` las skills con las que se construyó el proyecto. Claude Code las carga solo al abrir esta carpeta, así que cualquiera que la clone obtiene las mismas convenciones:
+
+| Skill | Para qué |
+|---|---|
+| `agente-basico` | Patrón completo: agente LangChain v1 + prompt y modelo en YAML + `tools/` + FastAPI + chat React |
+| `agent-prompt-yaml-format` | Formato del system prompt: YAML con metadata y secciones en tags |
+| `python-module-structure` | Orden de la cabecera de cada `.py`: docstring, imports, `load_dotenv()`, variables, constantes |
+
+También puedes invocarlas a mano, por ejemplo `/agente-basico`.
+
 ## ⚠️ Limitaciones actuales
 
 - **Sin base de conocimiento:** el agente responde con conocimiento general de la administración municipal colombiana; los datos exactos los remite a los canales oficiales.
@@ -160,7 +187,7 @@ Los placeholders `{bot_name}` y `{fecha_actual}` se reemplazan al arrancar el ag
 
 - [ ] RAG con documentos oficiales de trámites de la Alcaldía
 - [ ] Memoria persistente con Postgres (`PostgresSaver`)
-- [ ] Tools: consulta de estado de PQRSD, agendamiento de citas
+- [ ] Más tools: consulta de estado de PQRSD, agendamiento de citas
 - [ ] Observabilidad con Langfuse
 - [ ] Despliegue (Backend + Frontend)
 
