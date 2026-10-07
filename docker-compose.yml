@@ -1,0 +1,21 @@
+# Servicios de infraestructura local del proyecto.
+#
+# Levantar:   docker compose up -d
+# Detener:    docker compose down          (los datos se conservan en el volumen)
+# Borrar todo: docker compose down -v      (elimina también los vectores)
+#
+# Dashboard de Qdrant: http://localhost:6333/dashboard
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    container_name: girardota-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # API REST + dashboard
+      - "6334:6334"   # API gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  qdrant_data:

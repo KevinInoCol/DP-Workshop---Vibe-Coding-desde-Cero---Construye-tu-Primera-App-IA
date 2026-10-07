@@ -10,6 +10,7 @@ Agente conversacional de atención ciudadana para el municipio de **Girardota (A
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/GPT--4.1-412991?logo=openai&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-DC244C?logo=qdrant&logoColor=white)
 
 ---
 
@@ -18,9 +19,10 @@ Agente conversacional de atención ciudadana para el municipio de **Girardota (A
 - 📄 **Trámites:** explica para qué sirve cada trámite (predial, certificado de residencia, licencias, SISBÉN…), qué suele requerir y qué dependencia lo atiende.
 - 📨 **PQRSD:** ayuda a identificar si es petición, queja, reclamo, sugerencia o denuncia y cómo radicarla.
 - 🚨 **Urgencias:** ante una emergencia remite de inmediato a la línea **123**.
+- 🌐 **Búsqueda en internet:** consulta información actual con [Tavily](https://tavily.com) (requisitos vigentes, horarios, noticias del municipio) y cita las fuentes.
 - 🕒 **Fecha y hora reales:** las consulta con una tool en hora de Colombia, cada vez que las necesita.
 - 🧠 **Memoria por conversación:** recuerda el contexto dentro de cada sesión de chat.
-- 🛡️ **No inventa datos:** costos, plazos, horarios y teléfonos los remite siempre a los canales oficiales.
+- 🛡️ **No inventa datos:** costos, plazos, horarios y teléfonos solo los da si los encontró en una fuente; si no, remite a los canales oficiales.
 
 ## 🏗️ Arquitectura
 
@@ -32,13 +34,16 @@ flowchart LR
     A --> M[("GPT-4.1<br/>OpenAI")]
     P["prompt/<br/>system_prompt.yaml"] -.-> A
     C["model_config/<br/>model_config.yaml"] -.-> A
-    A <--> T["tools/<br/>fecha y hora"]
+    A <--> T["tools/<br/>fecha y hora · búsqueda web"]
+    T --> W[("Tavily<br/>internet")]
+    PDF["rag/Base de Conocimiento/<br/>📄 PDF"] -- "rag/ingesta.py<br/>(4 pasos)" --> Q[("Qdrant<br/>:6333")]
 ```
 
 ## 📁 Estructura del proyecto
 
 ```
 .
+├── docker-compose.yml                 # Qdrant en local
 ├── Backend/
 │   ├── agent.py                       # Construye el agente (y chat por terminal)
 │   ├── api.py                         # API REST con FastAPI
@@ -48,7 +53,12 @@ flowchart LR
 │   │   └── model_config.yaml          # Modelo, temperatura, tokens, reintentos
 │   ├── tools/
 │   │   ├── __init__.py                # Lista TOOLS que recibe el agente
-│   │   └── fecha_hora.py              # obtener_fecha_hora_actual (America/Bogota)
+│   │   ├── fecha_hora.py              # obtener_fecha_hora_actual (America/Bogota)
+│   │   └── busqueda_web.py            # buscar_en_internet (Tavily)
+│   ├── rag/
+│   │   ├── ingesta.py                 # Pipeline RAG: PDF → chunks → embeddings → Qdrant
+│   │   ├── validacion_nombre_tenant_id.py
+│   │   └── Base de Conocimiento/      # Aquí van los PDF
 │   ├── requirements.txt
 │   └── .env.example
 └── Frontend/
@@ -66,8 +76,20 @@ flowchart LR
 - Python **3.11+** (probado con 3.13) — se recomienda [uv](https://docs.astral.sh/uv/)
 - Node.js **20+** y npm
 - Una API key de [OpenAI](https://platform.openai.com/api-keys)
+- [Docker](https://www.docker.com/products/docker-desktop/) para levantar Qdrant
+- Una API key de [Tavily](https://app.tavily.com) para la búsqueda en internet (el plan gratuito alcanza)
 
-### 1. Backend
+### 1. Qdrant (base de datos vectorial)
+
+Desde la raíz del proyecto:
+
+```bash
+docker compose up -d
+```
+
+Dashboard en **http://localhost:6333/dashboard**. Los vectores persisten en un volumen de Docker; `docker compose down -v` los borra.
+
+### 2. Backend
 
 ```bash
 cd Backend
@@ -78,7 +100,7 @@ uv pip install -r requirements.txt
 # (alternativa sin uv: python -m venv .venv && .venv/bin/pip install -r requirements.txt)
 
 # Variables de entorno
-cp .env.example .env    # y coloca tu OPENAI_API_KEY
+cp .env.example .env    # y coloca tu OPENAI_API_KEY y TAVILY_API_KEY
 
 # Levantar la API
 .venv/bin/uvicorn api:app --reload --port 8000
@@ -86,7 +108,26 @@ cp .env.example .env    # y coloca tu OPENAI_API_KEY
 
 > En Windows usa `.venv\Scripts\uvicorn` en lugar de `.venv/bin/uvicorn`.
 
-### 2. Frontend
+### 3. Cargar la base de conocimiento (RAG)
+
+Coloca tus PDF en `Backend/rag/Base de Conocimiento/` y ejecuta, desde `Backend/`:
+
+```bash
+.venv/bin/python rag/ingesta.py
+```
+
+El pipeline tiene 4 pasos:
+
+| Paso | Qué hace | Con qué |
+|---|---|---|
+| 1. Cargar | Lee cada PDF página por página | `pypdf` |
+| 2. Dividir | Trocea el texto en chunks de 1000 caracteres con 200 de solapamiento | `RecursiveCharacterTextSplitter` |
+| 3. Embeddings | Convierte cada chunk en un vector | OpenAI `text-embedding-3-small` |
+| 4. Guardar | Sube chunks y vectores a la colección `tenant_id_alcaldia_girardota` | `QdrantVectorStore` |
+
+Cada ejecución **recrea la colección**: puedes volver a correrlo tras cambiar los PDF sin duplicar datos.
+
+### 4. Frontend
 
 En otra terminal:
 
@@ -143,7 +184,7 @@ El `session_id` identifica la conversación: mismo id → el agente recuerda lo 
 
 El prompt está separado del código y organizado por **tags**, cada uno con una responsabilidad:
 
-`<Identidad>` · `<Personalidad>` · `<Habilidades>` · `<Objetivo_Principal>` · `<Fuentes_De_Datos>` · `<Herramientas_Disponibles>` · `<Instrucciones_Generales>` · `<Deteccion_Intenciones>` · `<Flujos_Por_Intencion>` · `<Formato_De_Respuesta>` · `<IMPORTANTE>`
+`<Identidad>` · `<Personalidad>` · `<Habilidades>` · `<Objetivo_Principal>` · `<Fuentes_De_Datos>` · `<Herramientas_Disponibles>` · `<Reglas_De_Uso_De_Tools>` · `<Instrucciones_Generales>` · `<Deteccion_Intenciones>` · `<Flujos_Por_Intencion>` · `<Formato_De_Respuesta>` · `<IMPORTANTE>`
 
 El placeholder `{bot_name}` se reemplaza al arrancar el agente.
 
@@ -152,6 +193,7 @@ El placeholder `{bot_name}` se reemplaza al arrancar el agente.
 | Tool | Qué devuelve | Cuándo la usa el agente |
 |---|---|---|
 | `obtener_fecha_hora_actual` | Día de la semana, fecha y hora en Colombia (UTC-5) | Preguntas por la fecha u hora, o expresiones como "hoy", "mañana", "este mes", plazos y horarios |
+| `buscar_en_internet` | Hasta 5 fuentes (título, URL, fragmento) vía Tavily, priorizando Colombia | Datos concretos o recientes: requisitos y costos vigentes, horarios, canales de atención, noticias y eventos |
 
 La fecha **no** va en el prompt: se calcula en cada llamada, así nunca queda congelada aunque el servidor lleve días encendido.
 
@@ -162,6 +204,9 @@ Para añadir una tool nueva: créala en `tools/` con el decorador `@tool`, agré
 | Variable | Obligatoria | Descripción |
 |---|---|---|
 | `OPENAI_API_KEY` | ✅ | API key de OpenAI |
+| `QDRANT_URL` | — | URL de Qdrant (por defecto `http://localhost:6333`) |
+| `QDRANT_COLLECTION` | — | Colección del RAG (por defecto `tenant_id_alcaldia_girardota`) |
+| `TAVILY_API_KEY` | Recomendada | API key de Tavily. Sin ella, el agente funciona pero sin búsqueda en internet |
 | `FRONTEND_ORIGINS` | — | Orígenes permitidos por CORS (por defecto `http://localhost:5173`) |
 
 > ⚠️ Nunca subas tu `.env` al repositorio: ya está incluido en `.gitignore`.
@@ -180,12 +225,13 @@ También puedes invocarlas a mano, por ejemplo `/agente-basico`.
 
 ## ⚠️ Limitaciones actuales
 
-- **Sin base de conocimiento:** el agente responde con conocimiento general de la administración municipal colombiana; los datos exactos los remite a los canales oficiales.
+- **Sin base de conocimiento propia:** los datos concretos salen de internet, cuya calidad depende de lo que esté publicado; el agente cita la fuente y pide confirmar con la Alcaldía.
 - **Memoria volátil:** las conversaciones viven en memoria y se pierden al reiniciar el Backend.
 
 ## 🗺️ Próximos pasos
 
-- [ ] RAG con documentos oficiales de trámites de la Alcaldía
+- [x] Pipeline de ingesta RAG a Qdrant
+- [ ] Tool de recuperación para que el agente consulte la base de conocimiento
 - [ ] Memoria persistente con Postgres (`PostgresSaver`)
 - [ ] Más tools: consulta de estado de PQRSD, agendamiento de citas
 - [ ] Observabilidad con Langfuse

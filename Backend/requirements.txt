@@ -1,5 +1,9 @@
 langchain
 langchain-openai
+langchain-tavily
+pypdf
+langchain-text-splitters
+langchain-qdrant
 pyyaml
 python-dotenv
 fastapi
