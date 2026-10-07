@@ -1,0 +1,16 @@
+name: alcaldia-girardota-model-config
+version: 1.0.0
+description: Configuración del modelo de lenguaje del agente de la Alcaldía de Girardota.
+
+# Identidad del agente (se inyecta en el prompt como {bot_name}).
+agent:
+  bot_name: Giro
+
+# Modelo de lenguaje. Se instancia con init_chat_model("<provider>:<name>").
+model:
+  provider: openai
+  name: gpt-4.1
+  temperature: 0.2      # bajo: respuestas consistentes y con poca invención
+  max_tokens: 1024      # tope de la respuesta
+  timeout: 60           # segundos por llamada
+  max_retries: 2
