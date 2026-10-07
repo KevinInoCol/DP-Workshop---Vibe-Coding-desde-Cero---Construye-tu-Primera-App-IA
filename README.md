@@ -252,6 +252,10 @@ Para añadir una tool nueva: créala en `tools/` con el decorador `@tool`, agré
 
 > ⚠️ Nunca subas tu `.env` al repositorio: ya está incluido en `.gitignore`.
 
+## 💬 Prompts del workshop
+
+Todos los prompts con los que se construyó el proyecto, en orden y con su resultado, están en [`PROMPTS.md`](PROMPTS.md).
+
 ## 🤖 Skills de Claude Code
 
 El repo incluye en `.claude/skills/` las skills con las que se construyó el proyecto. Claude Code las carga solo al abrir esta carpeta, así que cualquiera que la clone obtiene las mismas convenciones:
