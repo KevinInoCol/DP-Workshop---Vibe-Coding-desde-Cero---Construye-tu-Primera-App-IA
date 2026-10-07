@@ -9,7 +9,7 @@ agent:
 # Modelo de lenguaje. Se instancia con init_chat_model("<provider>:<name>").
 model:
   provider: openai
-  name: gpt-4.1
+  name: gpt-5.1
   temperature: 0.2      # bajo: respuestas consistentes y con poca invención
   max_tokens: 2048      # tope de la respuesta (los trámites largos tienen listas extensas)
   timeout: 60           # segundos por llamada

@@ -9,7 +9,7 @@ Agente conversacional de atención ciudadana para el municipio de **Girardota (A
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
-![OpenAI](https://img.shields.io/badge/GPT--4.1-412991?logo=openai&logoColor=white)
+![OpenAI](https://img.shields.io/badge/GPT--5.1-412991?logo=openai&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/Qdrant-DC244C?logo=qdrant&logoColor=white)
 ![Postgres](https://img.shields.io/badge/Postgres-18-4169E1?logo=postgresql&logoColor=white)
 
@@ -34,7 +34,7 @@ flowchart LR
     U([👤 Ciudadano]) --> F["Frontend<br/>React + Vite<br/>:5173"]
     F -- "POST /api/chat<br/>(proxy de Vite)" --> B["Backend<br/>FastAPI<br/>:8000"]
     B --> A["Agente<br/>LangChain v1<br/>create_agent"]
-    A --> M[("GPT-4.1<br/>OpenAI")]
+    A --> M[("GPT-5.1<br/>OpenAI")]
     P["prompt/<br/>system_prompt.yaml"] -.-> A
     C["model_config/<br/>model_config.yaml"] -.-> A
     A <--> T["tools/<br/>base de conocimiento · búsqueda web · fecha y hora"]
@@ -211,7 +211,7 @@ El `session_id` identifica la conversación: mismo id → el agente recuerda lo 
 | Clave | Valor | Para qué |
 |---|---|---|
 | `agent.bot_name` | `Giro` | Nombre del asistente (se inyecta en el prompt) |
-| `model.name` | `gpt-4.1` | Modelo de OpenAI |
+| `model.name` | `gpt-5.1` | Modelo de OpenAI |
 | `model.temperature` | `0.2` | Bajo: respuestas consistentes, poca invención |
 | `model.max_tokens` | `2048` | Tope de longitud de la respuesta (los trámites largos tienen listas extensas) |
 | `model.timeout` | `60` | Segundos por llamada |
